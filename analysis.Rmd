@@ -1,0 +1,141 @@
+---
+title: "Lifting Exercise Prediction"
+author: "Matthew Que"
+date: "June 8, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(caret)
+library(randomForest)
+library(rpart)
+
+set.seed(12345)
+```
+
+## Introduction
+
+This is an analysis on predicting the manner the babell lifts were done. The 
+provided data consists of 5 different ways (correct and incorrect) the lifts 
+were performed. The goal is to create an accurate model for predicting the 
+manner in which the lifts were performed using the test data sets
+
+## Approach
+
+Below are the summary of the aprroach that will be used for this analysis:
+
+1.  Load/Clean data
+2.  Cross Validation
+3.  Identify important variables
+4.  Model using Random Forest
+5.  Predict using the 20 test cases
+6.  Conclusion
+
+## Load/Clean Data
+
+First, we load the data into TrainSet and TestSet variables and identify invalid 
+data as NA.
+
+```{r data}
+url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+
+if(!file.exists("pml-training.csv")){
+    download.file(url, destfile = "pml-training.csv")
+}
+
+url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+if(!file.exists("pml-testing.csv")){
+    download.file(url, destfile = "pml-testing.csv")
+}
+
+TrainSet <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+TestSet <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+```
+
+Next, we'll further clean up the data by removing all of the unneccessary
+variables. Based on the results using str, we will be removing the following 
+columns:
+
+*  columns with NA values
+*  unneccessary columns
+
+``` {r unneccessaryVariables-structure, results="hide"}
+str(TrainSet)
+```
+
+``` {r unneccessaryVariables}
+
+TrainSet <- TrainSet[,-c(1:7)]
+TestSet <- TestSet[,-c(1:7)]
+
+TrainSet <- TrainSet[, colSums(is.na(TrainSet)) == 0]
+TestSet <- TestSet[, colSums(is.na(TestSet)) == 0]
+```
+
+## Cross Validation
+
+For cross validating, we'll split our training set into train (75%) and test 
+sets (25%)
+
+``` {r crossValidation}
+
+tTrainSet <- createDataPartition(y=TrainSet$classe, p=0.75, list=FALSE)
+TrainTrainSet <- TrainSet[tTrainSet,]
+TestTrainSet <- TrainSet[-tTrainSet,]
+
+```
+
+## Identify important variables
+
+Now, we'll use Principal Component Analysis to further identify the variables 
+that are of importance to our analysis. Since all of our remaining variables
+are of numeric type, we can directly use PCA on our training data.
+
+``` {r pca-structure, results="hide"}
+str(TrainTrainSet)
+```
+
+``` {r pca}
+pProcess <- preProcess(TrainTrainSet[,-53], method="pca")
+TrainPCA <- predict(pProcess, TrainTrainSet[,-53])
+```
+
+## Model using Random Forest
+
+Apply random forest to training set (TrainTrainSet): 
+
+```{r randomforest}
+
+model <- randomForest(TrainTrainSet$classe~., data=TrainPCA)
+print(model)
+
+```
+
+Predict using test set (TestTrainSet):
+
+```{r testsetprediction}
+
+TestPCA <- predict(pProcess, TestTrainSet[,-53])
+confusionMatrix(TestTrainSet$classe,predict(model,TestPCA))
+
+```
+
+## Predict using the 20 test cases
+
+Now, we will apply our model and predict using the 20 test cases.
+
+```{r predict20}
+
+TestPCA <- predict(pProcess, TestSet[,-53])
+TestSet$classe <- predict(model, TestPCA)
+TestSet$classe
+
+```
+
+## Conclusion
+
+Our model produced an accuracy rate of 0.9778 with 0.0222 as our estimated out of
+sample error.
